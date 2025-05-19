@@ -42,6 +42,11 @@ return [
 
     'gsm_app' => [
         'base_url' => env('GSM_APP_API_URL', 'http://localhost:8081')
-    ]
+    ],
+    
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-3.5-turbo'),
+    ],
 
 ];

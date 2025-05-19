@@ -8,6 +8,7 @@ use App\Services\LLMService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class AiMessageController extends Controller
 {
@@ -23,7 +24,7 @@ class AiMessageController extends Controller
         $analysis = $this->llm->analyze($text);
         $intent = $analysis['intent'];
         $parameters = $analysis['parameters'];
-
+        Log::info(json_encode($analysis));
         $response = match ($intent) {
             'query_bill' => $this->callGsmApp('/api/v1/bill/query', [
                 'subscriber_no' => $user->id,
@@ -47,16 +48,17 @@ class AiMessageController extends Controller
             default => null,
         };
         if ($response == null) {
-            $reply = $this->llm->generateReply($analysis['intent'], $parameters, $analysis);
+            broadcast(new MessageReceived($analysis["response"], $user->id))->toOthers();
+            return response()->json(['sent' => true]);
         } else {
             $data = $response?->json() ?? [];
             $statusCode = $response?->status();
-
+            Log::info(json_encode($data));
             $reply = $statusCode === 200
                 ? $this->llm->generateReply($intent, $parameters, $data)
-                : $this->llm->generateReplyFromError('api_error', [
+                : $this->llm->generateReply('api_error', [
                     'message' => $data['message'] ?? 'Unexpected error',
-                ]);
+                ], $data);
         }
 
         broadcast(new MessageReceived($reply, $user->id))->toOthers();

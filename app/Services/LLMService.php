@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class LLMService
 {
@@ -66,17 +67,29 @@ class LLMService
 
         $prompt = "{$systemPrompt}\n\nUser message: \"{$message}\"";
 
-        $response = Http::post(config('services.ollama.base_url') . '/api/generate', [
-            'model' => config('services.ollama.model'),
-            'prompt' => $prompt,
-            'stream' => false,
-        ]);
+        $response = Http::withToken(config('services.openai.key'))
+            ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => config('services.openai.model'),
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => $prompt,
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "User message: \"$message\""
+                    ],
+                ],
+            ]);
 
         if ($response->failed()) {
             throw new \Exception("LLM request failed: " . $response->body());
         }
 
-        return json_decode($response->json()['response'], true);
+        $json = $response->json();
+        $content = $json['choices'][0]['message']['content'] ?? '{}';
+
+        return json_decode($content, true);
     }
 
     public function generateReply(string $intent, array $parameters, array $data): string
@@ -88,34 +101,54 @@ class LLMService
         $jsonData = $this->prettyPrint($data);
 
         $prompt = <<<PROMPT
-            You're a telecom assistant AI.
+            You're a helpful and polite telecom assistant AI. Based on the provided user intent and internal system JSON data, generate a clear and concise summary of the subscriber's bill.
 
-            The user intent is: {$intent}
+            User Intent: {$intent}
 
-            Here are the relevant parameters:
-            - subscriber_id: {$subscriberId}
-            - month: {$month}
-            - year: {$year}
-            - amount: {$amount}
+            Parameters provided:
+            - Subscriber ID: {$subscriberId}
+            - Month: {$month}
+            - Year: {$year}
+            - Amount filter: {$amount}
 
-            Here is the response from the internal system (JSON):
+            JSON Response:
             {$jsonData}
 
-            Write a helpful and polite one-paragraph summary in natural language based on this data.
+            Instructions:
+            - If the response includes a general message like “please provide subscriber ID,” relay that clearly and kindly.
+            - If billing data is present, mention the total amount due, whether it is paid, and the formatted date.
+            - If available, break down the detailed billing information:
+            - Group usage by featureType (e.g., CALL, INTERNET).
+            - Sum and list each usage type with the total amount and total usage.
+            - Mention any items that were free (amount = 0).
+            - Convert usageAmount to human-readable units if applicable (e.g., MB/GB for internet).
+            - Keep the tone friendly, professional, and informative.
+            - Only include factual information from the JSON.
+            - Combine all this into a single polite paragraph without bullet points or headings.
+
         PROMPT;
 
 
-        $response = Http::post(config('services.ollama.base_url') . '/api/generate', [
-            'model' => config('services.ollama.model'),
-            'prompt' => $prompt,
-            'stream' => false,
-        ]);
+        $response = Http::withToken(config('services.openai.key'))
+            ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => config('services.openai.model'),
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => $prompt,
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => ""
+                    ],
+                ],
+            ]);
 
         if ($response->failed()) {
             return 'Something went wrong while generating response.';
         }
-
-        return trim($response->json()['response'] ?? '');
+        Log::info(json_encode($response->json()));
+        return trim($response['choices'][0]['message']['content'] ?? '');
     }
 
     protected function prettyPrint(array $data): string
@@ -138,13 +171,22 @@ class LLMService
 
             Write a clear, short, polite explanation to the user. Company name is XellPay also act like you are live chat assistant. Also use HTML tags to make message more readable such as b, br, etc.
         PROMPT;
+        Log::info($prompt);
+        $response = Http::withToken(config('services.openai.key'))
+            ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => config('services.openai.model'),
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => $prompt,
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $message
+                    ],
+                ],
+            ]);
 
-        $response = Http::post(config('services.ollama.base_url') . '/api/generate', [
-            'model' => config('services.ollama.model'),
-            'prompt' => $prompt,
-            'stream' => false,
-        ]);
-
-        return trim($response->json()['response'] ?? 'Sorry, something went wrong.');
+        return trim($response['choices'][0]['message']['content'] ?? 'Sorry, something went wrong.');
     }
 }
