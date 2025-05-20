@@ -7,6 +7,8 @@ Sohbet mesajları işlenir, OpenAI ile entegre LLM analizleri yapılır ve XellP
 
 ![Description](system_arch.jpg)
 
+[Projeyi Tanıtan Video](https://drive.google.com/file/d/12Qbcmui1MHsyFtKEJjygiVP96M5G6cRz/view?usp=sharing)
+
 ---
 
 ## 🧠 Özellikler
