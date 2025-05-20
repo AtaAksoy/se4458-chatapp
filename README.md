@@ -5,6 +5,10 @@ Sohbet mesajları işlenir, OpenAI ile entegre LLM analizleri yapılır ve XellP
 
 ---
 
+![Description](system_arch.jpg)
+
+---
+
 ## 🧠 Özellikler
 
 - Laravel 12 (API-only yapı)
